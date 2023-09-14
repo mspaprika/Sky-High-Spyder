@@ -9,7 +9,7 @@ int DISPLAY_SCALE = 1;
 const Vector2D METEOR_VELOCITY_DEFAULT{ 1.0f, 0.f }; 
 const Vector2D AGENT8_VELOCITY_DEFAULT{ 2.f, 0.f };
 
-const float AGENT8_SPEED{ 6.5f };
+const float AGENT8_SPEED{ 5.0f };
 const float SPECIAL_ASTEROID_SPEED{ 1.0f };
 const float ASTEROID_SPEED{ 2.0f };
 const float METEOR_SPEED{ 1.0f };
@@ -53,10 +53,10 @@ enum GameFlow
 struct GameState
 {
 	int score{ 0 };
-	int gameCount{ 1 };
-	int highlScore{ 0 };
-	int wins{ 0 };
+	int level{ 1 };
+	int highScore{ 0 };
 	int gems{ MAX_GEMS };
+	bool playMode{ true };
 	bool paused{ false };
 	bool sound{ false };
 	bool music{ false };
@@ -114,13 +114,13 @@ void DrawGamePlay();
 void DrawLobby();
 void DrawSoundControl();
 
-
 // The entry point for a PlayBuffer program
 void MainGameEntry( PLAY_IGNORE_COMMAND_LINE )
 {
 	Play::CreateManager( DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_SCALE );
 	Play::CentreAllSpriteOrigins();
-	Play::LoadBackground("Data//Backgrounds//background.png");	
+	Play::LoadBackground("Data//Backgrounds//background.png");
+	
 }
 
 // Called by PlayBuffer every frame (60 times a second!)
@@ -156,7 +156,6 @@ bool MainGameUpdate( float elapsedTime )
 			UpdateGems();
 			UpdateRing();
 			UpdateAsteroidPieces();
-			DrawGameStats();
 			DrawGamePlay();
 			break;
 		}
@@ -168,14 +167,6 @@ bool MainGameUpdate( float elapsedTime )
 				gameState.paused = false;
 				gameState.state = STATE_GAME_PLAY;
 			}
-			break;
-		}
-		case STATE_GAME_OVER:
-		{
-			break;
-		}
-		case STATE_VICTORY:
-		{
 			break;
 		}
 	}
@@ -233,6 +224,7 @@ void CreateGameObjects()
 
 	int id = Play::CreateGameObject(TYPE_METEOR, { Play::RandomRoll(DISPLAY_WIDTH), Play::RandomRoll(DISPLAY_WIDTH) }, 50, "meteor");
 	GameObject& objMeteor = Play::GetGameObject(id);
+	Play::SetSprite(objMeteor, "meteor", 0.25f);
 	objMeteor.rotation = Play::DegToRad(90);
 }
 
@@ -292,7 +284,17 @@ void DrawGamePlay()
 	for (int idRing : vRings)
 	{
 		GameObject& objRing = Play::GetGameObject(idRing);
-		Play::DrawSpriteRotated("ring", objRing.pos, 1,  objRing.rotation, 2.5f, .3f);
+		Play::DrawSpriteRotated("ring", objRing.pos, 1,  objRing.rotation, 3.0f, .1f);
+		Play::DrawSpriteRotated("ring", objRing.pos, 1,  objRing.rotation, 2.5f, .2f);
+		Play::DrawSpriteRotated("ring", objRing.pos, 1,  objRing.rotation, 1.8f, .3f);
+	}
+
+	DrawGameStats();
+
+	if (!gameState.playMode)
+	{
+		Play::DrawFontText("151px", (gameState.agent8State == STATE_DEAD) ? "GAME OVER" : "VICTORY !!!", {DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2}, Play::CENTRE);
+		Play::DrawFontText("64px", "PRESS TAB TO RESTART", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT - 100 }, Play::CENTRE);
 	}
 
 	Play::PresentDrawingBuffer();
@@ -313,9 +315,9 @@ void DrawGameStats()
 	GameObject& objAgent8 = Play::GetGameObjectByType(TYPE_AGENT8);
 	GameObject& objMeteor = Play::GetGameObjectByType(TYPE_METEOR);
 	Play::DrawFontText("132px", "SCORE: " + std::to_string(gameState.score), { DISPLAY_WIDTH / 2, 50 }, Play::CENTRE);
-	//Play::DrawFontText("64px", "Angle: " + std::to_string(objMeteor.rotation), { DISPLAY_WIDTH - 100, 50 }, Play::CENTRE);
-	Play::DrawFontText("64px", "Wins: " + std::to_string(gameState.wins), { DISPLAY_WIDTH - 300, 50 }, Play::CENTRE);
-	Play::DrawFontText("64px", "Total: " + std::to_string(gameState.highlScore), { 100, 50 }, Play::CENTRE);
+	Play::DrawFontText("64px", "PlayMode: " + std::to_string(gameState.playMode), { DISPLAY_WIDTH - 100, 50 }, Play::CENTRE);
+	Play::DrawFontText("64px", "Level: " + std::to_string(gameState.level), { DISPLAY_WIDTH - 300, 50 }, Play::CENTRE);
+	Play::DrawFontText("64px", "Total: " + std::to_string(gameState.highScore), { 100, 50 }, Play::CENTRE);
 	Play::DrawFontText("64px", "Collisions: " + std::to_string(gameState.collisionCount), { 300, 50 }, Play::CENTRE);
 	Play::DrawFontText("64px", "Agent State: " + std::to_string(gameState.agent8State), { 300, 100 }, Play::CENTRE);
 	Play::DrawFontText("64px", "Gems: " + std::to_string(gameState.gems), { 300, 200 }, Play::CENTRE);
@@ -342,6 +344,8 @@ void HandlePlayerControls()
 	}
 	if (Play::KeyPressed(VK_SPACE))
 	{
+		if (gameState.sound)
+			Play::PlayAudio("explode");
 
 		Play::SetSprite( objAgent8, "agent8_fly", 0.0f );
 		AsteroidExplosion();
@@ -373,28 +377,31 @@ void UpdateAgent8()
 
 	switch (gameState.agent8State)
 	{
-	case STATE_ATTACHED:
-	{	
-		objAgent8.velocity = { 0.f, 0.f };
-		objAgent8.acceleration = { 0.f, 0.f };
-		objAgent8.pos = objSpecialAsteroid.pos;
-		break;
-	}
-	case STATE_FLY:
-	{
-		CreateParticles();
-		FloatDirectionObject(objAgent8, AGENT8_SPEED);
-		AsteroidCollision();
-		break;
-	}
-	case STATE_DEAD:
-	{
-		break;
-	}
+		case STATE_ATTACHED:
+		{	
+			objAgent8.velocity = { 0.f, 0.f };
+			objAgent8.acceleration = { 0.f, 0.f };
+			objAgent8.pos = objSpecialAsteroid.pos;
+			break;
+		}
+		case STATE_FLY:
+		{
+			CreateParticles();
+			FloatDirectionObject(objAgent8, AGENT8_SPEED);
+			AsteroidCollision();
+			break;
+		}
+		case STATE_DEAD:
+		{
+			FloatDirectionObject(objAgent8, 0.5f);
+			break;
+		}
 	}
 
 	LoopObject(objAgent8);
-	HandlePlayerControls();
+
+	if (gameState.playMode)
+		HandlePlayerControls();
 
 	Play::UpdateGameObject(objAgent8);
 
@@ -431,7 +438,22 @@ void UpdateMeteors()
 
 	for (int idMeteor : vMeteors)
 	{
+
 		GameObject& objMeteor = Play::GetGameObject(idMeteor);
+
+		if (IsColliding(objMeteor) && gameState.playMode && gameState.agent8State == STATE_FLY)
+		{
+			if(gameState.sound)
+				Play::PlayAudio("combust");
+
+			GameObject& objAgent8 = Play::GetGameObjectByType(TYPE_AGENT8);
+			Play::SetSprite(objAgent8, "agent8_dead", 0.25f);
+			objAgent8.rotation = objMeteor.rotation;
+			gameState.agent8State = STATE_DEAD;
+			objMeteor.type = TYPE_DESTROYED;
+			gameState.playMode = false;
+		}
+
 		objMeteor.rotation += Play::DegToRad(0.1);
 		FloatDirectionObject(objMeteor, METEOR_SPEED);
 		LoopObject(objMeteor);
@@ -443,9 +465,9 @@ void UpdateAsteroids()
 {
 	std::vector<int> vAsteroids = Play::CollectGameObjectIDsByType(TYPE_ASTEROID);
 
-	for (int id_asteroid : vAsteroids)
+	for (int idAsteroid : vAsteroids)
 	{
-		GameObject& objAsteroid = Play::GetGameObject(id_asteroid);
+		GameObject& objAsteroid = Play::GetGameObject(idAsteroid);
 		FloatDirectionObject(objAsteroid, ASTEROID_SPEED);
 		LoopObject(objAsteroid);
 		Play::UpdateGameObject(objAsteroid);
@@ -462,6 +484,9 @@ void UpdateGems()
 {
 	std::vector<int> vGems = Play::CollectGameObjectIDsByType(TYPE_GEM);
 
+	if (vGems.size() == 0 && gameState.gems == 0)
+		gameState.playMode = false;	
+
 	for (int idGem : vGems)
 	{
 		GameObject& objGem = Play::GetGameObject(idGem);
@@ -469,6 +494,9 @@ void UpdateGems()
 
 		if (IsColliding(objGem) && gameState.agent8State == STATE_FLY)
 		{
+			if (gameState.sound)
+				Play::PlayAudio("reward");
+
 			gameState.score += 500;
 			int id = Play::CreateGameObject(TYPE_RING, objGem.pos, 50, "ring");
 			GameObject& objRing = Play::GetGameObject(id);
@@ -513,9 +541,6 @@ void UpdateRing()
 			GameObject& objRing = Play::GetGameObject(idRing);
 			objRing.frame++;
 
-			if (objRing.frame % 2)
-				Play::DrawObjectRotated(objRing, (10 - objRing.frame) / 10.f);
-
 			if (objRing.frame >= 10 || !DisplayAreaTest(objRing, PARTICLE_AABB) || !Play::IsVisible(objRing) )
 				objRing.type = TYPE_DESTROYED;
 	}	
@@ -556,7 +581,7 @@ void AsteroidCollision()
 {
 	GameObject& objSpecialAsteroid = Play::GetGameObjectByType(TYPE_SPECIAL);
 
-	if (IsColliding(objSpecialAsteroid) && gameState.agent8State == STATE_FLY)
+	if (IsColliding(objSpecialAsteroid) && gameState.agent8State == STATE_FLY && gameState.playMode)
 		gameState.agent8State = STATE_ATTACHED;
 
 	std::vector<int> vAsteroids = Play::CollectGameObjectIDsByType(TYPE_ASTEROID);
@@ -711,9 +736,11 @@ void ResetGame()
 {
 	DestroyAllItems();
 
-	int score{ 0 };
-	bool paused{ false };
-	int collisionCount{ 0 };
+	gameState.score = { 0 };
+	gameState.paused = { false };
+	gameState.collisionCount = { 0 };
+	gameState.gems = { MAX_GEMS };
+	gameState.playMode = { true };
 
 	Play::CentreAllSpriteOrigins(); 
 
