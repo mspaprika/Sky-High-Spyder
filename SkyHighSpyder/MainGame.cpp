@@ -25,6 +25,7 @@ const Vector2D LASER_ACCELERATION{ 0.f, 0.f };
 
 const int MAX_GEMS{ 5 };
 const int MAX_ASTEROIDS{ 3 };
+const int SHIELD_DURATION{ 300 };
 
 const Vector2D METEOR_AABB{ 50.f, 50.f };
 const Vector2D ASTEROID_AABB{ 50.f, 50.f };
@@ -61,6 +62,7 @@ struct GameState
 	bool paused{ false };
 	bool sound{ false };
 	bool music{ false };
+	bool powerActivated{ false };
 	int collisionCount{ 0 };
 	int meteorCollisions{ 0 };
 
@@ -83,6 +85,7 @@ enum gameObjectType
 	TYPE_RING,
 	TYPE_LASER,
 	TYPE_SPECIAL,
+	TYPE_SHIELD,
 	TYPE_DESTROYED,
 };
 
@@ -97,7 +100,7 @@ void UpdateAsteroids();
 void UpdateAsteroidPieces();
 void UpdateGemsAndDiamonds();
 void UpdateParticles();
-void UpdateRing();
+void UpdateRings();
 void UpdateDestroyed();
 
 void CreateGameObjects();
@@ -158,7 +161,7 @@ bool MainGameUpdate( float elapsedTime )
 			UpdateMeteors();
 			UpdateParticles();
 			UpdateGemsAndDiamonds();
-			UpdateRing();
+			UpdateRings();
 			UpdateAsteroidPieces();
 			DrawGamePlay();
 			break;
@@ -242,7 +245,7 @@ void DrawGamePlay()
 {
 	GameObject& objAgent8 = Play::GetGameObjectByType(TYPE_AGENT8);
 	GameObject& objSpecialAsteroid = Play::GetGameObjectByType(TYPE_SPECIAL);
-
+	
 	std::vector<int> vMeteors = Play::CollectGameObjectIDsByType(TYPE_METEOR);
 
 	for (int idMeteor : vMeteors)
@@ -303,6 +306,18 @@ void DrawGamePlay()
 		GameObject& objDiamond = Play::GetGameObject(idDiamond);
 		Play::DrawObjectRotated(objDiamond);
 		objDiamond.scale = 0.5f;
+	}
+
+	std::vector<int> vShields = Play::CollectGameObjectIDsByType(TYPE_SHIELD);
+	for (int idShield : vShields)
+	{
+		GameObject& objShield = Play::GetGameObject(idShield);
+
+		if (gameState.playMode)
+		{
+			Play::DrawSpriteRotated("ring", objShield.pos, 1, objShield.rotation, 2.8f, .1f);
+			Play::DrawSpriteRotated("ring", objShield.pos, 1, objShield.rotation, 2.5f, .4f);
+		}
 	}
 
 	Play::DrawObjectRotated(objSpecialAsteroid);
@@ -380,7 +395,6 @@ void HandlePlayerControls()
 		GameObject& objLaser = Play::GetGameObject(id);
 		objLaser.rotation = objAgent8.rotation;
 	}
-
 	Play::UpdateGameObject(objAgent8);
 }
 
@@ -486,10 +500,9 @@ void UpdateMeteors()
 
 	for (int idMeteor : vMeteors)
 	{
-
 		GameObject& objMeteor = Play::GetGameObject(idMeteor);
 
-		if (IsColliding(objMeteor) && gameState.playMode && gameState.agent8State == STATE_FLY)
+		if (IsColliding(objMeteor) && gameState.playMode && gameState.agent8State == STATE_FLY && !gameState.powerActivated)
 		{
 			if(gameState.sound)
 				Play::PlayAudio("combust");
@@ -533,7 +546,7 @@ void UpdateGemsAndDiamonds()
 	std::vector<int> vGems = Play::CollectGameObjectIDsByType(TYPE_GEM);
 	std::vector<int> vDiamonds = Play::CollectGameObjectIDsByType(TYPE_DIAMOND);
 
-	if (vGems.size() == 0 && gameState.gems == 0)
+	if (vGems.size() == 0 && vDiamonds.size() == 0 && gameState.gems == 0)
 		gameState.playMode = false;	
 
 	for (int idGem : vGems)
@@ -546,6 +559,7 @@ void UpdateGemsAndDiamonds()
 			if (gameState.sound)
 				Play::PlayAudio("reward");
 
+			gameState.gems--;
 			gameState.score += 500;
 			int id = Play::CreateGameObject(TYPE_RING, objGem.pos, 50, "ring");
 			GameObject& objRing = Play::GetGameObject(id);
@@ -568,16 +582,22 @@ void UpdateGemsAndDiamonds()
 			if (gameState.sound)
 				Play::PlayAudio("reward");
 
+			gameState.gems--;
+			gameState.powerActivated = true;
 			gameState.score += 1000;
-			int id = Play::CreateGameObject(TYPE_RING, objDiamond.pos, 50, "ring");
-			GameObject& objRing = Play::GetGameObject(id);
+			GameObject& objAgent8 = Play::GetGameObjectByType(TYPE_AGENT8);
+
+			int id = Play::CreateGameObject(TYPE_SHIELD, objAgent8.pos, 50, "ring");
+			GameObject& objShield = Play::GetGameObject(id);
+			objShield.rotation = objAgent8.rotation;
+			gameState.powerActivated = true;
+			
 			objDiamond.type = TYPE_DESTROYED;
 		}
 
 		FloatDirectionObject(objDiamond, GEM_SPEED);
 		LoopObject(objDiamond);
 	}
-
 }
 
 void CreateParticles()
@@ -602,17 +622,32 @@ void UpdateParticles()
 	}
 }
 
-void UpdateRing()
+void UpdateRings()
 {
-		std::vector<int> vRings = Play::CollectGameObjectIDsByType(TYPE_RING);
+	std::vector<int> vShields = Play::CollectGameObjectIDsByType(TYPE_SHIELD);
 
-		for (int idRing : vRings)
+	for (int idShield : vShields)
+	{
+		GameObject& objShield = Play::GetGameObject(idShield);
+		objShield.pos = Play::GetGameObjectByType(TYPE_AGENT8).pos;
+		objShield.frame++;
+
+		if (objShield.frame >= SHIELD_DURATION)
 		{
-			GameObject& objRing = Play::GetGameObject(idRing);
-			objRing.frame++;
+			objShield.type = TYPE_DESTROYED;
+			gameState.powerActivated = false;
+		}
+	}
 
-			if (objRing.frame >= 10 || !DisplayAreaTest(objRing, PARTICLE_AABB) || !Play::IsVisible(objRing) )
-				objRing.type = TYPE_DESTROYED;
+	std::vector<int> vRings = Play::CollectGameObjectIDsByType(TYPE_RING);
+
+	for (int idRing : vRings)
+	{
+		GameObject& objRing = Play::GetGameObject(idRing);
+		objRing.frame++;
+
+		if (objRing.frame >= 10 || !DisplayAreaTest(objRing, PARTICLE_AABB) || !Play::IsVisible(objRing) )
+			objRing.type = TYPE_DESTROYED;
 	}	
 }
 
@@ -703,36 +738,27 @@ void AsteroidExplosion()
 	GameObject& objAsteroidPieces1 = Play::GetGameObject(id);
 	Play::SetSprite(objAsteroidPieces1, "asteroid_pieces", 0.f);
 	objAsteroidPieces1.frame = 1;
-	objAsteroidPieces1.rotation = Play::DegToRad(180);
-	//Play::SetGameObjectDirection(objAsteroidPieces1, ASTEROID_PIECE_SPEED, objAsteroidPieces1.rotation);
 	objAsteroidPieces1.velocity = ASTEROID_PIECE_VELOCITY_3;
 
 	id = Play::CreateGameObject(TYPE_PIECES, objSpecialAsteroid.pos, 50, "asteroid_pieces");
 	GameObject& objAsteroidPieces2 = Play::GetGameObject(id);
 	Play::SetSprite(objAsteroidPieces2, "asteroid_pieces", 0.f);
 	objAsteroidPieces2.frame = 2;
-	objAsteroidPieces2.rotation = Play::DegToRad(180);
-	//Play::SetGameObjectDirection(objAsteroidPieces2, ASTEROID_PIECE_SPEED, objAsteroidPieces2.rotation);
 	objAsteroidPieces2.velocity = ASTEROID_PIECE_VELOCITY_2;
 
 	id = Play::CreateGameObject(TYPE_PIECES, objSpecialAsteroid.pos, 50, "asteroid_pieces");
 	GameObject& objAsteroidPieces3 = Play::GetGameObject(id);
 	Play::SetSprite(objAsteroidPieces3, "asteroid_pieces", 0.f);
 	objAsteroidPieces3.frame = 3;
-	objAsteroidPieces3.rotation = Play::DegToRad(270);
-	//Play::SetGameObjectDirection(objAsteroidPieces3, ASTEROID_PIECE_SPEED, objAsteroidPieces3.rotation);
 	objAsteroidPieces3.velocity = ASTEROID_PIECE_VELOCITY_1;
-	
-	//objAsteroidPieces.rotation = objSpecialAsteroid.rotation;
 
 	if (gameState.gems > 0)
 	{
-		if (Play::RandomRoll(6) == 2)
-			id = Play::CreateGameObject(TYPE_DIAMOND, { objSpecialAsteroid.oldPos.x - 60, objSpecialAsteroid.oldPos.y - 60 }, 50, "diamond");
+		if (Play::RandomRoll(4) == 2)
+			id = Play::CreateGameObject(TYPE_DIAMOND, { objSpecialAsteroid.oldPos.x - 100, objSpecialAsteroid.oldPos.y - 100 }, 50, "diamond");
 		else 
-			id = Play::CreateGameObject(TYPE_GEM, { objSpecialAsteroid.oldPos.x - 60, objSpecialAsteroid.oldPos.y - 60 }, 50, "gem");
+			id = Play::CreateGameObject(TYPE_GEM, { objSpecialAsteroid.oldPos.x - 100, objSpecialAsteroid.oldPos.y - 100 }, 50, "gem");
 
-		gameState.gems--;
 		GameObject& objGem = Play::GetGameObject(id);
 		objGem.rotation = Randomize(630, 0.01);
 	}
@@ -786,6 +812,7 @@ void DestroyAllItems()
 {
 	Play::GetGameObjectByType(TYPE_AGENT8).type = TYPE_DESTROYED;
 	Play::GetGameObjectByType(TYPE_SPECIAL).type = TYPE_DESTROYED;
+	Play::GetGameObjectByType(TYPE_SHIELD).type = TYPE_DESTROYED;
 
 	std::vector<int> vAsteroids = Play::CollectGameObjectIDsByType(TYPE_ASTEROID);
 	for (int idAsteroid : vAsteroids)
@@ -822,6 +849,12 @@ void DestroyAllItems()
 	{
 		Play::GetGameObject(idDiamond).type = TYPE_DESTROYED;
 	}
+
+	std::vector<int> vRings = Play::CollectGameObjectIDsByType(TYPE_RING);
+	for (int idRing : vRings)
+	{
+		Play::GetGameObject(idRing).type = TYPE_DESTROYED;
+	}
 }
 
 void UpdateDestroyed()
@@ -844,6 +877,7 @@ void ResetGame()
 	gameState.gems = { MAX_GEMS };
 	gameState.playMode = { true };
 	gameState.meteorCollisions = { 0 };
+	gameState.powerActivated = { false };
 
 	Play::CentreAllSpriteOrigins(); 
 
