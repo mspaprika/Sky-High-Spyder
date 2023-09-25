@@ -28,6 +28,7 @@ const Vector2D LASER_ACCELERATION{ 0.f, 0.f };
 
 int MAX_GEMS{ 2 };
 float timePassed = 0.f;
+float particleOpacity{ 1.f };
 const int MAX_ASTEROIDS{ 3 };
 const int SHIELD_DURATION{ 300 };
 
@@ -78,6 +79,7 @@ struct GameState
 	bool asteroidDestroyed{ false };
 	bool levelPassed{ false };
 	bool levelInfo{ true };
+	bool isAnimation{ false };
 
 	Agent8State agent8State = STATE_ATTACHED;
 	GameFlow state = STATE_LOBBY;
@@ -122,6 +124,7 @@ void UpdateDestroyed();
 
 void CreateGameObjects();
 void CreateParticles();
+void CreateRocketParticles();
 void LoopObject(GameObject& object);
 bool IsColliding(const GameObject& object);
 bool IsCollidingLaser(const GameObject& laser, const GameObject& object);
@@ -159,7 +162,6 @@ bool MainGameUpdate( float elapsedTime )
 	}
 
 	Play::DrawBackground();
-	DrawSoundControl();
 
 	switch (gameState.state)
 	{
@@ -207,7 +209,7 @@ bool MainGameUpdate( float elapsedTime )
 	UpdateDestroyed();
 	SoundControl();
 
-	if (gameState.levelPassed)
+	if (gameState.levelPassed && !gameState.isAnimation)
 	{
 		gameState.level++;
 		MAX_GEMS++;
@@ -324,8 +326,13 @@ void DrawGamePlay()
 	std::vector<int> vParticles = Play::CollectGameObjectIDsByType(TYPE_PARTICLE);
 	for (int idParticle : vParticles)
 	{
+		
 		GameObject& objParticle = Play::GetGameObject(idParticle);
-		Play::DrawObject(objParticle);
+
+		if (objParticle.frame >= 10)
+			particleOpacity = 0.5f;
+
+		Play::DrawObjectRotated(objParticle, particleOpacity);
 	}
 
 	std::vector<int> vGems = Play::CollectGameObjectIDsByType(TYPE_GEM);
@@ -373,6 +380,8 @@ void DrawGamePlay()
 			Play::DrawSpriteRotated("ring", objShield.pos, 1, objShield.rotation, 2.5f, .4f);
 		}
 	}
+
+	Play::DrawObjectRotated(objSpecialAsteroid);
 	
 	std::vector<int> vRockets = Play::CollectGameObjectIDsByType(TYPE_ROCKET);
 	for (int idRocket : vRockets)
@@ -381,7 +390,6 @@ void DrawGamePlay()
 		Play::DrawObjectRotated(objRocket);
 	}
 		
-	Play::DrawObjectRotated(objSpecialAsteroid);
 	Play::DrawObjectRotated(objAgent8);
 
 	DrawGameStats();
@@ -409,14 +417,9 @@ void DrawLobby()
 
 void DrawGameStats()
 {	
-
-	std::vector <int> vAsteroids = Play::CollectGameObjectIDsByType(TYPE_ASTEROID);
-	int size = vAsteroids.size();
-	GameObject& objAgent8 = Play::GetGameObjectByType(TYPE_AGENT8);
-	GameObject& objSpecialAsteroid = Play::GetGameObjectByType(TYPE_SPECIAL);
 	Play::DrawFontText("64px", "SCORE: " + std::to_string(gameState.score), { DISPLAY_WIDTH - 200, 50 }, Play::CENTRE);
-	Play::DrawFontText("64px", "HIGHSCORE: " + std::to_string(gameState.highScore), { DISPLAY_WIDTH - 200, 100 }, Play::CENTRE);
-	Play::DrawFontText("64px", "Spy state: " + std::to_string(gameState.agent8State), { DISPLAY_WIDTH - 400, 100 }, Play::CENTRE);
+	//Play::DrawFontText("64px", "HIGHSCORE: " + std::to_string(gameState.highScore), { DISPLAY_WIDTH - 200, 100 }, Play::CENTRE);
+	//Play::DrawFontText("64px", "Spy state: " + std::to_string(gameState.agent8State), { DISPLAY_WIDTH - 400, 100 }, Play::CENTRE);
 	//Play::DrawFontText("64px", "Asteroid rotation: " + std::to_string(objSpecialAsteroid.rotation), { DISPLAY_WIDTH - 400, 200 }, Play::CENTRE);
 	Play::DrawFontText("105px", (gameState.powerActivated) ? "SHIELD ACTIVATED" : "", {DISPLAY_WIDTH / 2 , 150}, Play::CENTRE);
 	Play::DrawFontText("132px", "Level: " + std::to_string(gameState.level), { DISPLAY_WIDTH / 2, 50 }, Play::CENTRE);
@@ -424,8 +427,6 @@ void DrawGameStats()
 	//Play::DrawFontText("64px", "Collisions: " + std::to_string(gameState.asteroidCollisions), { 300, 100 }, Play::CENTRE);
 	Play::DrawFontText("64px", "Gems: " + std::to_string(gameState.gemsCollected) + " of " + std::to_string(MAX_GEMS), {350, 50}, Play::CENTRE);
 }
-
-
 
 void FloatDirectionObject(GameObject& obj, float speed)
 {
@@ -458,6 +459,15 @@ void AttachedPlayerControls()
 		Play::SetSprite(objAgent8, "agent8_right", 0);
 		objAgent8.animSpeed = 0.5f;
 	}
+	else if (Play::KeyDown(VK_DOWN))
+	{
+		if (gameState.sound)
+			Play::PlayAudio("laser");
+
+		int id = Play::CreateGameObject(TYPE_LASER, objAgent8.pos, 50, "laser");
+		GameObject& objLaser = Play::GetGameObject(id);
+		objLaser.rotation = objAgent8.rotation;
+	}
 	else if (Play::KeyPressed(VK_SPACE))
 	{
 		if (gameState.sound)
@@ -481,15 +491,17 @@ void RocketPlayerControls()
 	GameObject& objRocket = Play::GetGameObjectByType(TYPE_ROCKET);
 
 	if (Play::KeyDown(VK_LEFT))
-		objRocket.rotation -= 0.1f;
+		objRocket.rotation -= 0.05f;
 
 	else if (Play::KeyDown(VK_RIGHT))
-		objRocket.rotation += 0.1f;
+		objRocket.rotation += 0.05f;
 
 	else if (Play::KeyPressed(VK_SPACE))
 	{
 		objAgent8.pos = { objAgent8.oldPos.x, objAgent8.oldPos.y - 100 };
 		objAgent8.velocity = { 0.f, -5.0f };
+		Play::MoveSpriteOrigin("agent8_right", 0, 35);
+		Play::StopAudioLoop("fan");
 		gameState.agent8State = STATE_FLY;
 	} 
 
@@ -503,10 +515,10 @@ void HandlePlayerControls()
 	
 
 	if (Play::KeyDown(VK_LEFT))
-		objAgent8.rotation += 0.1f; 
+		objAgent8.rotation -= 0.05f; 
 
 	else if (Play::KeyDown(VK_RIGHT))
-		objAgent8.rotation += 0.1f;		
+		objAgent8.rotation += 0.05f;		
 	
 	else if (Play::KeyDown(VK_DOWN))
 	{
@@ -542,6 +554,7 @@ void UpdateAgent8()
 		}
 		case STATE_ROCKET:
 		{
+			CreateRocketParticles();
 			objAgent8.velocity = { 0.f, 0.f };
 			objAgent8.acceleration = { 0.f, 0.f };
 			objAgent8.pos = objRocket.pos;
@@ -730,7 +743,11 @@ void UpdateRocket()
 		if (IsColliding(objRocket) && gameState.agent8State == STATE_FLY)
 		{
 			GameObject& objAgent8 = Play::GetGameObjectByType(TYPE_AGENT8);
+			Play::MoveSpriteOrigin("agent8_right", 0, -35);
 			gameState.agent8State = STATE_ROCKET;
+
+			if (gameState.sound)
+				Play::StartAudioLoop("fan");
 		}
 
 		objRocket.rotation += Play::DegToRad(0.1);
@@ -767,6 +784,8 @@ void UpdateGemsAndDiamonds()
 			gameState.score += 500;
 			int id = Play::CreateGameObject(TYPE_RING, objGem.pos, 50, "ring");
 			GameObject& objRing = Play::GetGameObject(id);
+
+			gameState.isAnimation = true;
 			objGem.type = TYPE_DESTROYED;
 		}
 
@@ -795,6 +814,7 @@ void UpdateGemsAndDiamonds()
 			GameObject& objShield = Play::GetGameObject(id);
 			objShield.rotation = objAgent8.rotation;
 			gameState.powerActivated = true;
+			gameState.isAnimation = true;
 			
 			objDiamond.type = TYPE_DESTROYED;
 		}
@@ -808,7 +828,18 @@ void CreateParticles()
 {
 	GameObject& objAgent8 = Play::GetGameObjectByType(TYPE_AGENT8);
 
-	Play::CreateGameObject(TYPE_PARTICLE, objAgent8.pos, 50, "particle");
+	Play::CreateGameObject(TYPE_PARTICLE, { objAgent8.pos.x + Play::RandomRollRange(-20, 20), objAgent8.pos.y + Play::RandomRollRange(-15, 15)}, 50, "particle");
+	Play::CreateGameObject(TYPE_PARTICLE, { objAgent8.pos.x + Play::RandomRollRange(-20, 20), objAgent8.pos.y + Play::RandomRollRange(-15, 15)}, 50, "particle");
+}
+
+void CreateRocketParticles()
+{
+	GameObject& objRocket = Play::GetGameObjectByType(TYPE_ROCKET);
+
+	Play::CreateGameObject(TYPE_PARTICLE, { objRocket.pos.x + Play::RandomRollRange(-20, 20), objRocket.pos.y + Play::RandomRollRange(-25, 25)}, 50, "particle");
+	Play::CreateGameObject(TYPE_PARTICLE, { objRocket.pos.x + Play::RandomRollRange(-20, 20), objRocket.pos.y + Play::RandomRollRange(-25, 25)}, 50, "particle");
+	Play::CreateGameObject(TYPE_PARTICLE, { objRocket.pos.x + Play::RandomRollRange(-20, 20), objRocket.pos.y + Play::RandomRollRange(-25, 25)}, 50, "particle");
+
 }
 
 void UpdateParticles()
@@ -819,14 +850,15 @@ void UpdateParticles()
 	{
 		GameObject& objParticle = Play::GetGameObject(idParticle);
 		objParticle.frame++;
-		
 
-		if (objParticle.frame >= 15 || !DisplayAreaTest(objParticle, PARTICLE_AABB)) 
+		if (objParticle.frame >= 20 || !DisplayAreaTest(objParticle, PARTICLE_AABB)) 
 			objParticle.type = TYPE_DESTROYED;
+
+		Play::UpdateGameObject(objParticle);
 	}
 }
 
-void UpdateRings()
+void UpdateRings()                                                                                                      
 {
 	std::vector<int> vShields = Play::CollectGameObjectIDsByType(TYPE_SHIELD);
 
@@ -839,6 +871,7 @@ void UpdateRings()
 		if (objShield.frame >= SHIELD_DURATION)
 		{
 			objShield.type = TYPE_DESTROYED;
+			gameState.isAnimation = false;
 			gameState.powerActivated = false;
 		}
 	}
@@ -852,8 +885,11 @@ void UpdateRings()
 		if (objRing.frame >= 30 || !DisplayAreaTest(objRing, PARTICLE_AABB) || !Play::IsVisible(objRing) )
 			objRing.type = TYPE_DESTROYED;
 	}	
-	if ( vRings.size() == 0 )
+	if (vRings.size() == 0)
 		scale = { 1.f };
+
+	if (vShields.size() == 0 && vRings.size() == 0)
+		gameState.isAnimation = false;
 }
 
 bool IsColliding(const GameObject& object)
@@ -932,6 +968,7 @@ void AsteroidCollision()
 	if (IsColliding(objSpecialAsteroid) && gameState.agent8State == STATE_FLY && gameState.playMode)
 	{
 		Play::SetSprite(objAgent8, "agent8_left", 0);
+		//Play::MoveSpriteOrigin("agent8_right", 0, 35);
 		gameState.agent8State = STATE_ATTACHED;
 		objAgent8.rotation = objSpecialAsteroid.rotation;
 	}
@@ -953,6 +990,7 @@ void AsteroidCollision()
 			objAgent8.rotation = objSpecialAsteroid.rotation;
 
 			Play::SetSprite(objAgent8, "agent8_left", 0);
+			//Play::MoveSpriteOrigin("agent8_right", 0, 35);
 			gameState.agent8State = STATE_ATTACHED;
 		}
 	}
