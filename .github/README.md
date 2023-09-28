@@ -1,6 +1,6 @@
 
-![](/.github/images/playbuffer_title.png)
-## A single-header C++ library for making simple 2D games 
+
+## Sky High Spy Remake / Sky High Spyder 
 * **PLATFORM**: Windows
 * **LANGUAGE**: C++
 * **ENVIRONMENT**: Visual Studio
@@ -8,11 +8,7 @@
 ## Why?
 Learning C++ is often seen as dry and difficult, partly because the examples used in teaching are usually text-based and uninspiring. PlayBuffer was designed to try and limit the demands of learning C++ while increasing the payoff for the learner by allowing them to make simple, 2D games.
 
-## A Learning Scaffold
-The PlayBuffer is a beginner's game-development framework, and is intended to be used as a temporary "scaffold" to be discarded once the learner has outgrown it. The library code is simple enough that that a learner could reasonably expect to understand how most of it works for themselves before moving on to a more sophisticated framework. It uses the simplest native Windows libraries (no DirectX/OpenGl/Vulcan) and implements sprite rendering in software, making it an interesting platform for studying basic C++ code optimisation too! 
 
-## Legal
-Copyright 2020 Sumo Digital Limited. Spyder™ is a trade mark of Sumo Group plc. 
 
 The PlayBuffer code is made available under the Creative Commons Attribution-No Derivatives 4.0 International Public License: https://creativecommons.org/licenses/by-nd/4.0/legalcode.
 
@@ -20,7 +16,7 @@ The PlayBuffer tutorial assets are derived from the original Spyder™ game by S
 
 <p align="center"> <img src="/.github/images/machine.png"> </p>
 
-![](/.github/images/getting_started_title.png)
+![](/.github/images/spyder_in_space.gif)
 
 ## What will you need?
 - A Windows-based PC (age and performance isn't too critical)
