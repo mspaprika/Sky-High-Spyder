@@ -474,6 +474,8 @@ void AttachedPlayerControls()
 			Play::PlayAudio("explode");
 
 		AsteroidExplosion(objSpecialAsteroid);
+		objAgent8.pos.x += sin(objAgent8.rotation) * 100;
+		objAgent8.pos.y -= cos(objAgent8.rotation) * 100;
 		gameState.agent8State = STATE_FLY;
 	}
 	else
@@ -498,7 +500,8 @@ void RocketPlayerControls()
 
 	else if (Play::KeyPressed(VK_SPACE))
 	{
-		objAgent8.pos = { objAgent8.oldPos.x, objAgent8.oldPos.y - 100 };
+		objAgent8.pos.x += sin(objAgent8.rotation) * 100;
+		objAgent8.pos.y -= cos(objAgent8.rotation) * 100;
 		objAgent8.velocity = { 0.f, -5.0f };
 		Play::MoveSpriteOrigin("agent8_right", 0, 35);
 		Play::StopAudioLoop("fan");
