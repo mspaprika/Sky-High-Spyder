@@ -18,7 +18,7 @@ This is my attempt to recreate Sky High Spy game during Sumo Digital internship.
 
 <br>
 <br>
-<img src="/.github/images/spyder_in_space.gif" width="400">
+<img src="/.github/images/spyder_in_space.gif" width="500">
 
 
 
